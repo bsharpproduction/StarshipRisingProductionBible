@@ -1,0 +1,301 @@
+{
+  "project": "STARSHIP RISING",
+  "version": "1.0",
+  "fps": 24,
+  "bpm": 87,
+  "master": { "width": 1920, "height": 1080 },
+  "defaults": {
+    "grain_overlay": "assets/overlays/ov_grain_scratch.jpg",
+    "grain_opacity": 0.32,
+    "static_overlay": "assets/overlays/ov_static_scanlines.jpg",
+    "static_opacity": 0.1,
+    "underexpose_ev": -0.6,
+    "max_type_lines": 2,
+    "no_faces": true,
+    "no_logos": true
+  },
+  "type_roles": {
+    "BODY": "condensed grotesque",
+    "NERVE": "italic serif",
+    "TELEMETRY": "monospace",
+    "GHOST": "wide-track thin"
+  },
+  "cues": [
+    {
+      "id": "intro",
+      "in": "00:00:00.00",
+      "out": "00:00:19.00",
+      "lyric": null,
+      "vocal": "female_wordless",
+      "plate": "assets/plates/02_intro_smudge.jpg",
+      "type": { "mode": "T-NONE" },
+      "motion": "scale 104 to 100, locked, gate weave",
+      "static_opacity": 0.06,
+      "notes": "Empty air. No rocket preview."
+    },
+    {
+      "id": "v1a",
+      "in": "00:00:19.00",
+      "out": "00:00:29.00",
+      "lyric": "There's a gleam on the Texas shore",
+      "plate": "assets/plates/03_texas_shore_gleam.jpg",
+      "type": {
+        "mode": "T-LATE T-RAIN",
+        "role": "BODY",
+        "emphasis": { "word": "gleam", "rung": "strain" },
+        "anchor": "right-third below horizon"
+      },
+      "motion": "drift right 2%"
+    },
+    {
+      "id": "v1b",
+      "in": "00:00:29.00",
+      "out": "00:00:34.00",
+      "lyric": "A stainless prayer we can't ignore",
+      "plate": "assets/plates/04_metal_skin_prayer.jpg",
+      "type": {
+        "mode": "T-HOLD",
+        "role": "BODY",
+        "emphasis": { "word": "prayer", "role": "NERVE" }
+      },
+      "motion": "macro drift across water beads"
+    },
+    {
+      "id": "v1c",
+      "in": "00:00:34.00",
+      "out": "00:00:39.00",
+      "lyric": "We packed the silence in a metal skin",
+      "plate": "assets/plates/04_metal_skin_prayer.jpg",
+      "dissolve_to": { "plate": "assets/plates/05_packed_silence_yard.jpg", "at": "00:00:36.00", "frames": 12 },
+      "type": {
+        "mode": "T-DECAY",
+        "emphasis": { "word": "silence", "rung": "whisper" }
+      }
+    },
+    {
+      "id": "v1d",
+      "in": "00:00:39.00",
+      "out": "00:00:46.00",
+      "lyric": "And told ourselves this is where we begin",
+      "plate": "assets/plates/05_packed_silence_yard.jpg",
+      "type": {
+        "mode": "T-LATE",
+        "emphasis": { "word": "begin", "rung": "whisper" }
+      }
+    },
+    {
+      "id": "pre1a",
+      "in": "00:00:46.00",
+      "out": "00:00:51.00",
+      "lyric": "The ground is shaking like a memory",
+      "plate": "assets/plates/06_ground_shaking.jpg",
+      "type": { "mode": "T-SPLIT T-STEP", "emphasis": { "word": "shaking" } },
+      "motion": "2-3px shake at 12fps cadence"
+    },
+    {
+      "id": "pre1b",
+      "in": "00:00:51.00",
+      "out": "00:00:55.00",
+      "lyric": "Of everything we couldn't keep",
+      "plate": "assets/plates/06_ground_shaking.jpg",
+      "insert": { "plate": "assets/plates/03_texas_shore_gleam.jpg", "frames": 4, "on": "keep" },
+      "type": { "mode": "T-DECAY", "role": "NERVE" }
+    },
+    {
+      "id": "ch1a",
+      "in": "00:00:55.00",
+      "out": "00:01:00.00",
+      "lyric": "Starship rising through the thinning air",
+      "plate": "assets/plates/07_starship_rising.jpg",
+      "type": {
+        "mode": "T-SCALEHIT",
+        "emphasis": { "word": "rising", "rung": "cry" },
+        "anchor": "lower-left sky"
+      }
+    },
+    {
+      "id": "ch1b",
+      "in": "00:01:00.00",
+      "out": "00:01:07.00",
+      "lyric": "I hear them singing from a place that isn't there",
+      "plate": "assets/plates/08_voices_in_static.jpg",
+      "type": {
+        "mode": "T-LATE",
+        "rung": "whisper",
+        "emphasis": { "word": "isn't there", "role": "TELEMETRY" }
+      },
+      "static_opacity": 0.22
+    },
+    {
+      "id": "ch1c",
+      "in": "00:01:07.00",
+      "out": "00:01:10.00",
+      "lyric": "Beautiful voices in the static",
+      "plate": "assets/plates/08_voices_in_static.jpg",
+      "type": {
+        "mode": "T-SPLIT",
+        "emphasis": { "word": "STATIC", "rung": "wall", "frames": 8 }
+      },
+      "static_opacity": 0.5,
+      "wall_type_allowed": true
+    },
+    {
+      "id": "ch1d",
+      "in": "00:01:10.00",
+      "out": "00:01:26.00",
+      "lyric": "Calling us home to a sky we've never known",
+      "plate": "assets/plates/09_sky_never_known.jpg",
+      "type": {
+        "mode": "T-SCALEHIT T-HOLD",
+        "emphasis": { "word": "home", "rung": "cry" },
+        "off_at": "00:01:16.00"
+      },
+      "notes": "After type off, T-NONE for female vocal air."
+    },
+    {
+      "id": "v2a",
+      "in": "00:01:26.00",
+      "out": "00:01:30.00",
+      "lyric": "The booster falls like a broken vow",
+      "plate": "assets/plates/10_booster_falls.jpg",
+      "type": {
+        "mode": "T-LATE",
+        "emphasis": { "word": "broken vow", "role": "NERVE" },
+        "anchor": "left water"
+      },
+      "motion": "booster drifts down 6% of frame"
+    },
+    {
+      "id": "v2b",
+      "in": "00:01:30.00",
+      "out": "00:01:35.00",
+      "lyric": "Back into the heat we left behind",
+      "plate": "assets/plates/10_booster_falls.jpg",
+      "insert": { "plate": "assets/plates/06_ground_shaking.jpg", "frames": 8, "on": "heat" },
+      "type": { "mode": "T-DECAY" }
+    },
+    {
+      "id": "v2c",
+      "in": "00:01:35.00",
+      "out": "00:01:37.00",
+      "lyric": "While we climb into the quiet",
+      "plate": "assets/plates/11_clocks_forget.jpg",
+      "type": { "mode": "T-MONO", "rung": "whisper", "emphasis": { "word": "quiet" } }
+    },
+    {
+      "id": "v2d",
+      "in": "00:01:37.00",
+      "out": "00:01:41.00",
+      "lyric": "Where the clocks forget to wind",
+      "plate": "assets/plates/11_clocks_forget.jpg",
+      "type": { "mode": "T-MONO", "role": "TELEMETRY" },
+      "motion": "one clock hand slows to a stop on forget"
+    },
+    {
+      "id": "pre2a",
+      "in": "00:01:41.00",
+      "out": "00:01:44.00",
+      "lyric": "No more gravity to hold the name",
+      "plate": "assets/plates/11_clocks_forget.jpg",
+      "type": { "mode": "T-STEP", "emphasis": { "word": "name", "fade_first": true } }
+    },
+    {
+      "id": "pre2b",
+      "in": "00:01:44.00",
+      "out": "00:01:50.00",
+      "lyric": "No more weight to keep us the same",
+      "plate": "assets/plates/11_clocks_forget.jpg",
+      "prelap": { "plate": "assets/plates/07_starship_rising.jpg", "at": "00:01:47.00" },
+      "type": { "mode": "T-DECAY", "role": "NERVE" }
+    },
+    {
+      "id": "ch2a",
+      "in": "00:01:50.00",
+      "out": "00:01:55.00",
+      "lyric": "Starship rising through the thinning air",
+      "plate": "assets/plates/07_starship_rising.jpg",
+      "crop": "tighter, start scale 112",
+      "type": { "mode": "T-SCALEHIT", "scale_vs_ch1": 0.9 }
+    },
+    {
+      "id": "ch2b",
+      "in": "00:01:55.00",
+      "out": "00:02:02.00",
+      "lyric": "I hear them singing from a place that isn't there",
+      "plate": "assets/plates/08_voices_in_static.jpg",
+      "type": { "mode": "T-LATE", "extra_delay_frames": 3, "rung": "whisper" }
+    },
+    {
+      "id": "ch2c",
+      "in": "00:02:02.00",
+      "out": "00:02:05.00",
+      "lyric": "Beautiful voices in the static",
+      "plate": "assets/plates/08_voices_in_static.jpg",
+      "type": { "mode": "T-SPLIT", "emphasis": { "word": "static", "rung": "cry" } },
+      "notes": "Do not repeat wall-rung STATIC."
+    },
+    {
+      "id": "ch2d",
+      "in": "00:02:05.00",
+      "out": "00:02:30.00",
+      "lyric": "Calling us home to a sky we've never known",
+      "plate": "assets/plates/09_sky_never_known.jpg",
+      "dissolve_to": { "plate": "assets/plates/12_leaving_earth.jpg", "at": "00:02:18.00", "frames": 24 },
+      "type": { "off_at": "00:02:10.00", "emphasis": { "word": "home", "rung": "speak" } }
+    },
+    {
+      "id": "br_a",
+      "in": "00:02:30.00",
+      "out": "00:02:35.00",
+      "lyric": "This is not the end of Earth",
+      "plate": "assets/plates/12_leaving_earth.jpg",
+      "type": { "mode": "T-LATE", "role": "BODY", "anchor": "inside the glass" }
+    },
+    {
+      "id": "br_b",
+      "in": "00:02:35.00",
+      "out": "00:02:40.00",
+      "lyric": "This is just the start of leaving",
+      "plate": "assets/plates/12_leaving_earth.jpg",
+      "type": { "mode": "T-SCALEHIT T-DECAY", "role": "NERVE", "emphasis": { "word": "leaving", "rung": "cry" } }
+    },
+    {
+      "id": "br_c",
+      "in": "00:02:40.00",
+      "out": "00:02:44.00",
+      "lyric": "Cold and beautiful",
+      "plate": "assets/plates/13_machine_breathing.jpg",
+      "type": { "role": "NERVE", "rung": "speak", "center": true },
+      "motion": "breathe pulse 87bpm amplitude 2%"
+    },
+    {
+      "id": "br_d",
+      "in": "00:02:44.00",
+      "out": "00:02:49.00",
+      "lyric": "The machine that dreams of breathing",
+      "plate": "assets/plates/13_machine_breathing.jpg",
+      "type": { "mode": "T-MONO T-SPLIT", "role": "TELEMETRY", "rung": "whisper", "emphasis": { "word": "dreams" } }
+    },
+    {
+      "id": "out_a",
+      "in": "00:02:49.00",
+      "out": "00:02:57.00",
+      "lyric": "Don't look down",
+      "plate": "assets/plates/14_dont_look_down.jpg",
+      "type": { "role": "BODY", "rung": "strain" }
+    },
+    {
+      "id": "out_b",
+      "in": "00:02:57.00",
+      "out": "00:03:10.00",
+      "lyric": "Don't look down",
+      "plate": "assets/plates/14_dont_look_down.jpg",
+      "dissolve_to": { "plate": "assets/plates/02_intro_smudge.jpg", "at": "00:03:02.00" },
+      "type": { "emphasis": { "word": "DOWN", "rung": "wall" }, "then": "T-DECAY" },
+      "static_opacity": 0.6,
+      "motion": "ease toward the fire in the well",
+      "wall_type_allowed": true,
+      "end_card": "1.5s harbor shadow + grain"
+    }
+  ]
+}
