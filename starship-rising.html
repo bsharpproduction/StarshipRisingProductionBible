@@ -1,0 +1,837 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Starship Rising</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Oswald:wght@500;600&family=Playfair+Display:ital,wght@1,500;1,600&display=swap"
+    />
+  </head>
+  <body>
+    <main id="stage" role="img" aria-label="Starship Rising. A night launch seen through wet glass and chainlink: stainless tanks, a rising ship, a falling booster, clocks, and a tower well.">
+      <canvas id="film" width="1920" height="1080"></canvas>
+      <button id="gate" type="button" aria-label="Play Starship Rising">
+        <span aria-hidden="true">▶</span>
+      </button>
+    </main>
+    <script src="/src/shared/motion-export.js"></script>
+    <script>
+      /*
+       * STARSHIP RISING
+       * Spec: starship-rising-motion-bible/MOTION_GRAPHICS_BIBLE.md
+       * Lyric times are locked to "Starship Rising.mp3" (3:29), not the bible's assumed 3:10.
+       * ?t=90 starts preview there. ?export=1 is the headless frame API.
+       */
+      ;(() => {
+        'use strict'
+
+        const W = 1920
+        const H = 1080
+        const FPS = 24
+        const LATE = 3 / FPS
+        const DURATION = 209.2
+        const BPM = 87
+
+        const params = new URLSearchParams(location.search)
+        const IS_EXPORT = params.has('export')
+        const START_AT = Math.max(0, parseFloat(params.get('t')) || 0)
+        const REDUCED = !IS_EXPORT && matchMedia('(prefers-reduced-motion: reduce)').matches
+
+        const AUDIO = 'Starship Rising.mp3'
+        const ROOT = 'starship-rising-motion-bible/assets/'
+
+        const PAPER = 'rgb(231, 226, 214)'
+        const FOG = '#7EC8C6'
+        const MAGENTA = '#C45B8A'
+        const SODIUM = '#E8A45A'
+        const HARBOR = '#0B1C22'
+        const AMBER = '#F0C27B'
+
+        const SIZES = { whisper: 26, speak: 44, strain: 72, cry: 128, wall: 260 }
+        const TRACK = { whisper: 0.12, speak: 0.04, strain: -0.012, cry: -0.035, wall: -0.05 }
+
+        const BODY = '"Oswald", "Arial Narrow", Impact, sans-serif'
+        const NERVE = '"Playfair Display", Georgia, serif'
+        const MONO = '"IBM Plex Mono", "Courier New", monospace'
+
+        const log = (...a) => console.info('[starship]', ...a)
+        const warn = (...a) => console.warn('[starship]', ...a)
+
+        const clamp = (v, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v))
+        const lerp = (a, b, k) => a + (b - a) * k
+        const inv = (a, b, v) => (a === b ? 1 : clamp((v - a) / (b - a)))
+        const smooth = (a, b, v) => {
+          const k = inv(a, b, v)
+          return k * k * (3 - 2 * k)
+        }
+        const easeOut = (k) => 1 - (1 - k) ** 3
+        const hash = (n) => {
+          const s = Math.sin(n * 127.1 + 311.7) * 43758.5453
+          return s - Math.floor(s)
+        }
+
+        const injectStyles = () => {
+          const style = document.createElement('style')
+          style.textContent = `
+            *{box-sizing:border-box}
+            html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
+            #stage{position:fixed;inset:0;display:grid;place-items:center;background:#000}
+            #film{display:block;width:min(100vw,177.7778vh);height:min(56.25vw,100vh);background:${HARBOR}}
+            #gate{position:absolute;inset:0;display:grid;place-items:center;border:0;background:rgba(7,13,16,.45);
+              color:rgba(231,226,214,.8);font-size:42px;cursor:pointer}
+            #gate[hidden]{display:none}
+            #gate:focus-visible{outline:1px solid rgba(231,226,214,.45);outline-offset:-10px}
+          `
+          document.head.appendChild(style)
+        }
+        injectStyles()
+
+        const canvas = document.getElementById('film')
+        const gate = document.getElementById('gate')
+        const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: true })
+        if (IS_EXPORT && gate) gate.hidden = true
+
+        const PLATE_SRC = {
+          p02: ROOT + 'plates/02_intro_smudge.jpg',
+          p03: ROOT + 'plates/03_texas_shore_gleam.jpg',
+          p04: ROOT + 'plates/04_metal_skin_prayer.jpg',
+          p05: ROOT + 'plates/05_packed_silence_yard.jpg',
+          p06: ROOT + 'plates/06_ground_shaking.jpg',
+          p07: ROOT + 'plates/07_starship_rising.jpg',
+          p08: ROOT + 'plates/08_voices_in_static.jpg',
+          p09: ROOT + 'plates/09_sky_never_known.jpg',
+          p10: ROOT + 'plates/10_booster_falls.jpg',
+          p11: ROOT + 'plates/11_clocks_forget.jpg',
+          p12: ROOT + 'plates/12_leaving_earth.jpg',
+          p13: ROOT + 'plates/13_machine_breathing.jpg',
+          p14: ROOT + 'plates/14_dont_look_down.jpg',
+        }
+
+        const plates = {}
+        let grain = null
+        let scan = null
+        let vignette = null
+
+        const makeCanvas = (w, h) => {
+          const c = document.createElement('canvas')
+          c.width = w
+          c.height = h
+          return c
+        }
+
+        const loadImage = (src) =>
+          new Promise((resolve, reject) => {
+            const img = new Image()
+            img.onload = () => resolve(img)
+            img.onerror = () => reject(new Error('Failed to load ' + src))
+            img.src = encodeURI(src)
+          })
+
+        const gradePlate = (img) => {
+          const c = makeCanvas(img.naturalWidth, img.naturalHeight)
+          const g = c.getContext('2d')
+          g.filter = 'brightness(0.84) saturate(0.8) contrast(1.08)'
+          g.drawImage(img, 0, 0)
+          g.filter = 'none'
+          g.globalCompositeOperation = 'soft-light'
+          g.globalAlpha = 0.38
+          g.fillStyle = '#12343C'
+          g.fillRect(0, 0, c.width, c.height)
+          return c
+        }
+
+        const buildVignette = () => {
+          const c = makeCanvas(W, H)
+          const g = c.getContext('2d')
+          const rad = g.createRadialGradient(W / 2, H * 0.46, H * 0.28, W / 2, H * 0.5, H * 0.78)
+          rad.addColorStop(0, 'rgba(7,13,16,0)')
+          rad.addColorStop(1, 'rgba(7,13,16,0.72)')
+          g.fillStyle = rad
+          g.fillRect(0, 0, W, H)
+          return c
+        }
+
+        const loadAssets = async () => {
+          const jobs = Object.entries(PLATE_SRC).map(async ([key, src]) => {
+            plates[key] = gradePlate(await loadImage(src))
+          })
+          jobs.push(
+            loadImage(ROOT + 'overlays/ov_grain_scratch.jpg').then((img) => (grain = img)),
+            loadImage(ROOT + 'overlays/ov_static_scanlines.jpg').then((img) => (scan = img)),
+          )
+          const results = await Promise.allSettled(jobs)
+          results.forEach((result) => {
+            if (result.status === 'rejected') warn(result.reason)
+          })
+          vignette = buildVignette()
+        }
+
+        const loadFonts = async () => {
+          if (!document.fonts) return
+          try {
+            await Promise.all([
+              document.fonts.load(`500 72px ${BODY}`, 'Starship rising'),
+              document.fonts.load(`italic 500 72px "Playfair Display"`, 'prayer beautiful leaving'),
+              document.fonts.load(`400 48px ${MONO}`, 'STATIC'),
+            ])
+            await document.fonts.ready
+          } catch (error) {
+            warn('Font load failed, using fallbacks.', error)
+          }
+        }
+
+        // Picture sections. Times are sung-word locks from the mix.
+        const SECTIONS = [
+          { id: 'intro', plate: 'p02', from: 0, to: 24.15, fadeIn: 2.4, kb: { s0: 1.04, s1: 1.0, fx: 0.62, fy: 0.48 }, step: true, smear: true, blur: 1.5, fog: 0.22 },
+          { id: 'shore', plate: 'p03', from: 24.15, to: 29.08, kb: { s0: 1.05, s1: 1.08, fx: 0.56, fy: 0.5, fx1: 0.62 } },
+          { id: 'metal', plate: 'p04', from: 29.08, to: 36.15, fadeOut: 0.5, kb: { s0: 1.1, s1: 1.04, fx: 0.4, fy: 0.5, fx1: 0.56 } },
+          { id: 'yard', plate: 'p05', from: 35.65, to: 44.78, fadeIn: 0.5, kb: { s0: 1.04, s1: 1.07, fx: 0.58, fy: 0.46 } },
+          { id: 'shake', plate: 'p06', from: 44.78, to: 55.0, kb: { s0: 1.05, s1: 1.1, fx: 0.52, fy: 0.52 }, shake: true, step: true, oxblood: true },
+          { id: 'mem', plate: 'p03', from: 53.76, to: 53.76 + 4 / FPS, insert: true, kb: { s0: 1.1, s1: 1.1, fx: 0.62, fy: 0.48 } },
+          { id: 'rise1', plate: 'p07', from: 55.0, to: 60.08, kb: { s0: 1.02, s1: 1.08, fx: 0.46, fy: 0.56 }, letterbox: true },
+          { id: 'crt', plate: 'p08', from: 60.08, to: 70.2, kb: { s0: 1.04, s1: 1.08, fx: 0.46, fy: 0.52 }, letterbox: true },
+          { id: 'sky1', plate: 'p09', from: 70.2, to: 85.0, kb: { s0: 1.04, s1: 1.1, fx: 0.4, fy: 0.48 }, letterbox: true, fog: 0.16 },
+          { id: 'fall', plate: 'p10', from: 85.0, to: 94.68, kb: { s0: 1.05, s1: 1.08, fx: 0.62, fy: 0.4 }, fall: 0.06 },
+          { id: 'heat', plate: 'p06', from: 91.76, to: 91.76 + 8 / FPS, insert: true, kb: { s0: 1.14, s1: 1.14, fx: 0.38, fy: 0.55 } },
+          { id: 'clocks', plate: 'p11', from: 94.68, to: 110.0, fadeOut: 2.7, kb: { s0: 1.04, s1: 1.1, fx: 0.4, fy: 0.5, fx1: 0.56 }, clock: true },
+          { id: 'rise2', plate: 'p07', from: 107.3, to: 114.95, fadeIn: 2.7, kb: { s0: 1.12, s1: 1.16, fx: 0.5, fy: 0.56 }, letterbox: true },
+          { id: 'crt2', plate: 'p08', from: 114.95, to: 125.2, kb: { s0: 1.06, s1: 1.1, fx: 0.48, fy: 0.5 }, letterbox: true },
+          { id: 'skyflash', plate: 'p09', from: 124.28, to: 124.28 + 3 / FPS, insert: true, kb: { s0: 1.08, s1: 1.08, fx: 0.42, fy: 0.46 } },
+          { id: 'sky2', plate: 'p09', from: 125.2, to: 138.0, fadeOut: 1, kb: { s0: 1.05, s1: 1.09, fx: 0.4, fy: 0.46 }, letterbox: true, step: true, fog: 0.2 },
+          { id: 'earth', plate: 'p12', from: 137.0, to: 160.5, fadeIn: 1, kb: { s0: 1.04, s1: 1.08, fx: 0.64, fy: 0.56 }, letterbox: true, stepUntil: 149 },
+          { id: 'machine', plate: 'p13', from: 160.5, to: 171.6, kb: { s0: 1.12, s1: 1.12, fx: 0.5, fy: 0.52 }, breathe: true, letterbox: true, brightenAt: 164.44 },
+          { id: 'well', plate: 'p14', from: 171.6, to: 188.2, fadeOut: 3.4, kb: { s0: 1.04, s1: 1.2, fx: 0.5, fy: 0.38, fy1: 0.72 } },
+          { id: 'eaten', plate: 'p02', from: 184.6, to: 207.4, fadeIn: 3.2, kb: { s0: 1.08, s1: 1.0, fx: 0.6, fy: 0.5 }, step: true, smear: true },
+        ]
+
+        const FLARES = {
+          p02: [{ u: 0.72, v: 0.4, len: 640, a: 0.16, color: FOG }],
+          p03: [{ u: 0.7, v: 0.52, len: 380, a: 0.28 }],
+          p04: [{ u: 0.64, v: 0.46, len: 260, a: 0.32 }],
+          p05: [{ u: 0.52, v: 0.46, len: 300, a: 0.34 }, { u: 0.8, v: 0.2, len: 160, a: 0.2, color: FOG }],
+          p06: [{ u: 0.3, v: 0.58, len: 560, a: 0.4 }],
+          p07: [{ u: 0.4, v: 0.64, len: 680, a: 0.42 }],
+          p08: [{ u: 0.3, v: 0.5, len: 200, a: 0.18, color: MAGENTA }],
+          p09: [{ u: 0.42, v: 0.32, len: 420, a: 0.14, color: FOG }],
+          p10: [{ u: 0.78, v: 0.7, len: 520, a: 0.4 }],
+          p11: [{ u: 0.44, v: 0.3, len: 180, a: 0.28 }],
+          p12: [{ u: 0.62, v: 0.58, len: 340, a: 0.16 }],
+          p13: [{ u: 0.5, v: 0.55, len: 280, a: 0.3 }],
+          p14: [{ u: 0.5, v: 0.64, len: 460, a: 0.36 }],
+        }
+
+        const sung = (text, t, extra = {}) => {
+          const word = { text, t: t + LATE + (extra.late || 0), role: 'body', rung: 'speak', ...extra }
+          delete word.late
+          return word
+        }
+
+        // Type. Appear times sit 3 frames after the sung syllable.
+        const LINES = [
+          { x: 1460, y: 620, align: 'right', out: 28.9, fade: 0.4, rain: true, words: [sung("There's", 24.18), sung('a', 25.22), sung('gleam', 25.48, { strainFor: 8 / FPS, then: 'speak' })] },
+          { x: 1460, y: 690, align: 'right', out: 28.9, fade: 0.4, rain: true, words: [sung('on', 26.18), sung('the', 26.56), sung('Texas', 26.68), sung('shore', 27.34)] },
+
+          { x: 560, y: 800, out: 34.0, fade: 0.45, hold: true, words: [sung('A', 29.1), sung('stainless', 29.76), sung('prayer', 30.26, { role: 'nerve' }), sung('we', 30.96), sung("can't", 31.62), sung('ignore', 32.22)] },
+
+          { x: 520, y: 790, out: 38.3, fade: 0.55, decay: true, words: [sung('We', 34.1), sung('packed', 34.74), sung('the', 35.02), sung('silence', 35.5, { rung: 'whisper' }), sung('in', 36.0), sung('a', 36.48), sung('metal', 36.78), sung('skin', 37.38)] },
+
+          { x: 700, y: 210, out: 44.5, fade: 0.4, words: [sung('And', 38.46), sung('told', 39.24), sung('ourselves', 39.54), sung('this', 40.54), sung('is', 41.02), sung('where', 41.38), sung('we', 41.62), sung('begin', 42.24, { rung: 'whisper' })] },
+
+          { x: 460, y: 800, out: 49.6, fade: 0.3, step: true, words: [sung('The', 44.82, { rung: 'strain' }), sung('ground', 46.04, { rung: 'strain' }), sung('is', 46.34, { rung: 'strain' }), sung('shaking', 46.68, { rung: 'strain', splitFor: 0.34 })] },
+          { x: 460, y: 880, out: 49.6, fade: 0.3, step: true, words: [sung('like', 47.14, { rung: 'strain' }), sung('a', 47.72, { rung: 'strain' }), sung('memory', 48.04, { rung: 'strain' })] },
+
+          { x: 1080, y: 860, out: 55.15, fade: 0.6, decay: true, words: [sung('Of', 49.78, { role: 'nerve' }), sung('everything', 51.04, { role: 'nerve' }), sung('we', 51.94, { role: 'nerve' }), sung("couldn't", 52.84, { role: 'nerve' }), sung('keep', 53.76, { role: 'nerve' })] },
+
+          { x: 470, y: 300, out: 59.9, fade: 0.35, words: [sung('Starship', 55.02), sung('rising', 56.54, { scalehit: true, rung: 'speak' })] },
+          { x: 470, y: 390, out: 59.9, fade: 0.35, words: [sung('through', 57.14), sung('the', 57.7), sung('thinning', 58.0), sung('air', 59.06)] },
+
+          { x: 620, y: 250, out: 66.15, fade: 0.4, words: [sung('I', 60.12, { rung: 'whisper' }), sung('hear', 60.52, { rung: 'whisper' }), sung('them', 61.0, { rung: 'whisper' }), sung('singing', 61.48, { rung: 'whisper' }), sung('from', 62.1, { rung: 'whisper' }), sung('a', 62.55, { rung: 'whisper' })] },
+          { x: 620, y: 310, out: 66.15, fade: 0.4, words: [sung('place', 62.95, { rung: 'whisper' }), sung('that', 63.45, { rung: 'whisper' }), sung("isn't", 64.05, { role: 'mono', rung: 'whisper' }), sung('there', 65.4, { role: 'mono', rung: 'whisper' })] },
+
+          { x: 560, y: 340, out: 69.15, fade: 0.25, words: [sung('Beautiful', 66.34, { role: 'nerve', rung: 'strain' })] },
+          { x: W / 2, y: 620, align: 'center', out: 70.35, fade: 0.28, words: [sung('STATIC', 69.3, { role: 'mono', wall: true, wallDrop: true, wallSize: 230, wallFor: 8 / FPS, splitFor: 0.42 })] },
+
+          { x: 500, y: 340, out: 76.15, fade: 0.45, hold: true, words: [sung('Calling', 70.24), sung('us', 70.98), sung('home', 71.66, { scalehit: true })] },
+          { x: 500, y: 820, out: 76.15, fade: 0.5, words: [sung('to', 72.22, { rung: 'whisper' }), sung('a', 72.7, { rung: 'whisper' }), sung('sky', 73.0, { rung: 'whisper' }), sung("we've", 73.46, { rung: 'whisper' }), sung('never', 74.28, { rung: 'whisper' }), sung('known', 75.06, { rung: 'whisper' })] },
+
+          { x: 460, y: 780, out: 89.7, fade: 0.4, words: [sung('The', 85.0), sung('booster', 85.92), sung('falls', 86.42), sung('like', 87.2), sung('a', 87.8)] },
+          { x: 460, y: 860, out: 89.7, fade: 0.4, words: [sung('broken', 88.0, { role: 'nerve', splitFor: 0.3 }), sung('vow', 88.6, { role: 'nerve' })] },
+
+          { x: 460, y: 800, out: 94.5, fade: 0.58, decay: true, words: [sung('Back', 89.9), sung('into', 90.7), sung('the', 91.3), sung('heat', 91.76), sung('we', 92.16), sung('left', 92.86), sung('behind', 93.28)] },
+
+          { x: 500, y: 230, out: 97.05, fade: 0.3, words: [sung('While', 94.72, { rung: 'whisper' }), sung('we', 95.06, { rung: 'whisper' }), sung('climb', 95.46, { rung: 'whisper' }), sung('into', 95.76, { rung: 'whisper' }), sung('the', 96.3, { rung: 'whisper' }), sung('quiet', 96.78, { role: 'mono', rung: 'whisper', mono: true })] },
+
+          { x: 430, y: 560, out: 99.65, fade: 0.35, words: [sung('Where', 97.16, { role: 'mono' }), sung('the', 97.6, { role: 'mono' }), sung('clocks', 97.96, { role: 'mono' }), sung('forget', 98.18, { role: 'mono' }), sung('to', 98.86, { role: 'mono' }), sung('wind', 99.32, { role: 'mono' })] },
+
+          { x: 980, y: 800, out: 104.7, fade: 0.35, step: true, words: [sung('No', 99.76), sung('more', 101.3), sung('gravity', 101.64), sung('to', 102.38), sung('hold', 102.94), sung('the', 103.3), sung('name', 103.9, { fadeFirst: true })] },
+
+          { x: 700, y: 280, out: 110.3, fade: 0.6, decay: true, words: [sung('No', 104.86, { role: 'nerve' }), sung('more', 106.38, { role: 'nerve' }), sung('weight', 106.7, { role: 'nerve' }), sung('to', 107.14, { role: 'nerve' }), sung('keep', 107.68, { role: 'nerve' }), sung('us', 108.16, { role: 'nerve' }), sung('the', 108.86, { role: 'nerve' }), sung('same', 109.28, { role: 'nerve' })] },
+
+          { x: 500, y: 320, out: 114.75, fade: 0.28, words: [sung('Starship', 110.04, { scale: 0.9 }), sung('rising', 111.54, { scalehit: true, scale: 0.9 })] },
+          { x: 500, y: 400, out: 114.75, fade: 0.28, words: [sung('through', 112.12, { scale: 0.9 }), sung('the', 112.66, { scale: 0.9 }), sung('thinning', 113.02, { scale: 0.9 }), sung('air', 114.04, { scale: 0.9 })] },
+
+          { x: 600, y: 250, out: 121.1, fade: 0.4, words: [sung('I', 114.98, { rung: 'whisper', late: 3 / FPS }), sung('hear', 115.4, { rung: 'whisper', late: 3 / FPS }), sung('them', 116.02, { rung: 'whisper', late: 3 / FPS }), sung('singing', 116.48, { rung: 'whisper', late: 3 / FPS }), sung('from', 117.08, { rung: 'whisper', late: 3 / FPS })] },
+          { x: 600, y: 310, out: 121.1, fade: 0.4, words: [sung('a', 117.66, { rung: 'whisper', late: 3 / FPS }), sung('place', 118.0, { rung: 'whisper', late: 3 / FPS }), sung('that', 118.48, { rung: 'whisper', late: 3 / FPS }), sung("isn't", 119.04, { role: 'mono', rung: 'whisper', late: 3 / FPS }), sung('there', 120.2, { role: 'mono', rung: 'whisper', late: 3 / FPS })] },
+
+          { x: 540, y: 300, out: 123.9, fade: 0.25, words: [sung('Beautiful', 121.32, { role: 'nerve', rung: 'strain' })] },
+          { x: 540, y: 400, out: 125.05, fade: 0.3, words: [sung('voices', 122.4), sung('in', 123.5), sung('the', 123.92), sung('static', 124.28, { rung: 'cry', role: 'mono', splitFor: 0.36, cyan: true })] },
+
+          { x: 520, y: 360, out: 130.25, fade: 0.4, words: [sung('Calling', 125.24), sung('us', 125.98), sung('home', 126.66)] },
+          { x: 520, y: 820, out: 130.25, fade: 0.45, words: [sung('to', 127.22, { rung: 'whisper' }), sung('a', 127.7, { rung: 'whisper' }), sung('sky', 128.0, { rung: 'whisper' }), sung("we've", 128.46, { rung: 'whisper' }), sung('never', 129.28, { rung: 'whisper' }), sung('known', 130.06, { rung: 'whisper' })] },
+
+          { x: 1120, y: 540, align: 'center', out: 155.1, fade: 0.4, words: [sung('This', 149.36), sung('is', 150.76), sung('not', 151.68), sung('the', 152.22), sung('end', 152.7), sung('of', 153.64), sung('Earth', 154.66)] },
+
+          { x: 1120, y: 500, align: 'center', out: 160.2, fade: 0.55, decay: true, words: [sung('This', 155.28, { role: 'nerve' }), sung('is', 156.04, { role: 'nerve' }), sung('just', 156.72, { role: 'nerve' }), sung('the', 157.3, { role: 'nerve' }), sung('start', 157.76, { role: 'nerve' }), sung('of', 158.34, { role: 'nerve' })] },
+          { x: 1120, y: 620, align: 'center', out: 160.35, fade: 0.6, decay: true, words: [sung('leaving', 159.18, { role: 'nerve', scalehit: true })] },
+
+          { x: W / 2, y: 500, align: 'center', out: 164.25, fade: 0.3, words: [sung('Cold', 160.56, { role: 'nerve' }), sung('and', 161.08, { role: 'nerve' })] },
+          { x: W / 2, y: 590, align: 'center', out: 164.25, fade: 0.3, words: [sung('beautiful', 161.76, { role: 'nerve' })] },
+
+          { x: 960, y: 860, align: 'center', out: 171.35, fade: 0.4, words: [sung('The', 164.44, { role: 'mono', rung: 'whisper', mono: true }), sung('machine', 164.82, { role: 'mono', rung: 'whisper', mono: true }), sung('that', 166.02, { role: 'mono', rung: 'whisper', mono: true }), sung('dreams', 166.72, { role: 'mono', rung: 'whisper', mono: true, splitFor: 2 / FPS }), sung('of', 167.28, { role: 'mono', rung: 'whisper', mono: true }), sung('breathing', 167.78, { role: 'mono', rung: 'whisper', mono: true })] },
+
+          { x: W / 2, y: 560, align: 'center', out: 176.25, fade: 0.35, words: [sung("Don't", 171.7, { rung: 'strain' }), sung('look', 172.38, { rung: 'strain' }), sung('down', 172.94, { rung: 'strain' })] },
+
+          { x: W / 2, y: 640, align: 'center', out: 182.0, fade: 0.7, decay: true, words: [sung('DOWN', 176.46, { wall: true, wallSize: 300, cyan: false })] },
+        ]
+
+        LINES.forEach((line) => {
+          line.words[line.words.length - 1].last = true
+        })
+
+        const INVERTS = [31.62, 34.74, 46.68, 69.3, 124.28, 166.72]
+
+        const sectionAlpha = (section, t) => {
+          if (t < section.from || t >= section.to) return 0
+          if (section.insert) return 1
+          const inn = section.fadeIn ? smooth(section.from, section.from + section.fadeIn, t) : 1
+          const out = section.fadeOut ? 1 - smooth(section.to - section.fadeOut, section.to, t) : 1
+          return inn * out
+        }
+
+        const motionTime = (section, t) => {
+          if (REDUCED || !section.step) return t
+          if (section.stepUntil && t > section.stepUntil) return t
+          return Math.floor(t * 12) / 12
+        }
+
+        const staticLevel = (t) => {
+          if (t >= 66.15 && t < 70.5) return 0.52
+          if (t >= 121.2 && t < 125.3) return 0.5
+          if (t >= 184.6) return lerp(0.16, 0.68, smooth(184.6, 200, t))
+          if (t >= 60.08 && t < 66.15) return 0.22
+          if (t < 24.15) return 0.06
+          return 0.1
+        }
+
+        const glitchAmount = (t) => {
+          const hits = [
+            [46.55, 0.45],
+            [69.15, 0.5],
+            [124.15, 0.42],
+            [166.65, 0.12],
+          ]
+          let amount = 0
+          for (const [t0, dur] of hits) {
+            const u = (t - t0) / dur
+            if (u >= 0 && u < 1) amount = Math.max(amount, 1 - u)
+          }
+          if (t > 192) amount = Math.max(amount, smooth(192, 206, t) * 0.85)
+          return amount
+        }
+
+        const fontFor = (role, size) => {
+          if (role === 'nerve') return `italic 500 ${size}px ${NERVE}`
+          if (role === 'mono') return `400 ${size}px ${MONO}`
+          return `500 ${size}px ${BODY}`
+        }
+
+        const sizeOf = (word, t) => {
+          const scale = word.scale || 1
+          if (word.wall) {
+            const target = word.wallSize || SIZES.wall
+            if (!word.wallDrop) return target
+            const u = t - word.t
+            const hold = word.wallFor || 8 / FPS
+            if (u < hold) return target
+            return lerp(target, SIZES.cry, smooth(hold, hold + 0.28, u))
+          }
+          if (word.scalehit) {
+            const u = t - word.t
+            const from = SIZES[word.rung] * scale
+            const cry = SIZES.cry * scale
+            const strain = SIZES.strain * scale
+            if (u < 0) return from
+            if (u < 0.1) return lerp(from, cry, easeOut(u / 0.1))
+            if (u < 0.55) return lerp(cry, strain, smooth(0.1, 0.55, u))
+            return strain
+          }
+          if (word.strainFor) {
+            const u = t - word.t
+            const rung = u >= 0 && u < word.strainFor ? 'strain' : word.then || 'speak'
+            return SIZES[rung] * scale
+          }
+          return SIZES[word.rung] * scale
+        }
+
+        const trackPx = (word, size) => {
+          const rung = word.wall ? 'wall' : word.rung
+          return (TRACK[rung] ?? 0) * size
+        }
+
+        const shownText = (word, t) => {
+          if (!word.mono) return word.text
+          const count = Math.floor((t - word.t) / 0.02)
+          if (count <= 0) return ''
+          return word.text.slice(0, count)
+        }
+
+        const wordAlpha = (word, line, t) => {
+          if (t < word.t) return 0
+          let alpha = word.mono ? 1 : line.step ? (t - word.t > 1 / 12 ? 1 : 0) : smooth(word.t, word.t + 0.16, t)
+          if (word.fadeFirst) alpha *= 1 - smooth(word.t + 0.25, word.t + 0.8, t)
+          const tail = line.hold && word.last ? 0.28 : 0
+          const fade = line.fade ?? 0.34
+          alpha *= 1 - smooth(line.out + tail - fade, line.out + tail, t)
+          if (line.rain) alpha *= 0.8 + 0.2 * hash(Math.floor(t * FPS) + word.t * 17)
+          return alpha
+        }
+
+        const drawPlate = (img, section, t, alpha, weave) => {
+          if (!img || alpha < 0.004) return null
+          const mt = motionTime(section, t)
+          const p = inv(section.from, section.to, mt)
+          let scale = lerp(section.kb.s0, section.kb.s1, p)
+          if (section.breathe && !REDUCED) scale *= 1 + 0.02 * Math.sin(t * (BPM / 60) * Math.PI * 2)
+          const fx = lerp(section.kb.fx, section.kb.fx1 ?? section.kb.fx, p)
+          const fy = lerp(section.kb.fy, section.kb.fy1 ?? section.kb.fy, p)
+          const cover = Math.max(W / img.width, H / img.height) * scale
+          const iw = img.width * cover
+          const ih = img.height * cover
+          let dx = W / 2 - fx * iw
+          let dy = H / 2 - fy * ih
+          if (section.fall) dy += section.fall * H * p
+          if (section.shake && !REDUCED) {
+            const decay = 1 - smooth(section.from, section.from + 4.2, t)
+            const step = Math.floor(t * 12)
+            dx += (hash(step) - 0.5) * 7 * decay
+            dy += (hash(step + 4) - 0.5) * 5 * decay
+          }
+          dx = Math.min(0, Math.max(W - iw, dx)) + weave.x
+          dy = Math.min(0, Math.max(H - ih, dy)) + weave.y
+          ctx.save()
+          ctx.globalAlpha = alpha
+          if (section.blur && !REDUCED) ctx.filter = `blur(${section.blur}px)`
+          ctx.drawImage(img, dx, dy, iw, ih)
+          if ((section.smear || section.step) && !REDUCED) {
+            ctx.globalAlpha = alpha * 0.28
+            ctx.drawImage(img, dx + 14, dy, iw, ih)
+          }
+          ctx.restore()
+          return { dx, dy, s: cover, img, key: section.plate, alpha }
+        }
+
+        const drawFlare = (map) => {
+          const list = FLARES[map.key]
+          if (!list) return
+          ctx.save()
+          ctx.globalCompositeOperation = 'screen'
+          for (const flare of list) {
+            const x = map.dx + flare.u * map.img.width * map.s
+            const y = map.dy + flare.v * map.img.height * map.s
+            const len = flare.len
+            const gradient = ctx.createLinearGradient(x - len, y, x + len, y)
+            const color = flare.color || SODIUM
+            gradient.addColorStop(0, 'rgba(0,0,0,0)')
+            gradient.addColorStop(0.42, color)
+            gradient.addColorStop(0.5, '#F3E6D0')
+            gradient.addColorStop(0.58, color)
+            gradient.addColorStop(1, 'rgba(0,0,0,0)')
+            ctx.globalAlpha = flare.a * map.alpha
+            ctx.fillStyle = gradient
+            ctx.fillRect(x - len, y - 3, len * 2, 6)
+          }
+          ctx.restore()
+        }
+
+        const drawClock = (map, t) => {
+          if (!map || t < 97.1 || t > 104.2) return
+          const x = map.dx + 0.3 * map.img.width * map.s
+          const y = map.dy + 0.36 * map.img.height * map.s
+          const tForget = 98.18
+          const rate = 0.85
+          const spinning = Math.min(t, tForget) - 94.7
+          const settled = t > tForget ? 0.4 * (1 - Math.exp(-(t - tForget) * 2.4)) : 0
+          const angle = spinning * rate + settled - Math.PI / 2
+          ctx.save()
+          ctx.translate(x, y)
+          ctx.rotate(angle)
+          ctx.strokeStyle = AMBER
+          ctx.globalAlpha = 0.85 * map.alpha
+          ctx.lineWidth = 2
+          ctx.beginPath()
+          ctx.moveTo(0, 0)
+          ctx.lineTo(34, 0)
+          ctx.stroke()
+          ctx.restore()
+        }
+
+        const drawTear = (t) => {
+          const amount = glitchAmount(t)
+          if (amount < 0.08 || REDUCED) return
+          const frame = Math.floor(t * FPS)
+          const bands = 3 + Math.floor(amount * 4)
+          for (let i = 0; i < bands; i++) {
+            const y = Math.floor(hash(frame * 3 + i * 19) * (H - 20))
+            const h = 3 + Math.floor(hash(i + 5) * 14 * amount)
+            const shift = Math.round((hash(frame + i * 13) - 0.5) * 64 * amount)
+            try {
+              const strip = ctx.getImageData(0, y, W, h)
+              ctx.putImageData(strip, shift, y)
+            } catch (error) {
+              warn('Tear skipped (canvas tainted).', error)
+              return
+            }
+          }
+        }
+
+        const drawGrain = (t, alpha) => {
+          if (!grain || alpha < 0.01) return
+          const cover = Math.max(W / grain.width, H / grain.height)
+          const frame = Math.floor(t * FPS)
+          ctx.save()
+          ctx.globalCompositeOperation = 'overlay'
+          ctx.globalAlpha = alpha
+          ctx.drawImage(grain, (hash(frame) - 0.5) * 8, (hash(frame + 2) - 0.5) * 8, grain.width * cover, grain.height * cover)
+          ctx.restore()
+        }
+
+        const drawScan = (t, alpha) => {
+          if (!scan || alpha < 0.01) return
+          const cover = Math.max(W / scan.width, H / scan.height) * 1.05
+          const oy = REDUCED ? 0 : (t * 36) % (scan.height * cover)
+          ctx.save()
+          ctx.globalCompositeOperation = 'screen'
+          ctx.globalAlpha = alpha
+          ctx.drawImage(scan, 0, oy - scan.height * cover, scan.width * cover, scan.height * cover)
+          ctx.drawImage(scan, 0, oy, scan.width * cover, scan.height * cover)
+          ctx.restore()
+        }
+
+        const drawType = (t) => {
+          const frame = Math.floor(t * FPS)
+          ctx.save()
+          ctx.textBaseline = 'alphabetic'
+          ctx.shadowColor = 'rgba(0,0,0,0.65)'
+          ctx.shadowOffsetY = 1
+          ctx.shadowBlur = 0
+          for (const line of LINES) {
+            const start = line.words[0].t - 0.05
+            if (t < start || t > line.out + 0.8) continue
+            const sizes = line.words.map((word) => sizeOf(word, t))
+            const texts = line.words.map((word) => shownText(word, t))
+            const widths = line.words.map((word, i) => {
+              if (!texts[i]) return 0
+              ctx.font = fontFor(word.role, sizes[i])
+              ctx.letterSpacing = `${trackPx(word, sizes[i])}px`
+              return ctx.measureText(texts[i]).width
+            })
+            const gap = 16
+            const total = widths.reduce((sum, w) => sum + w, 0) + gap * Math.max(0, widths.filter((w) => w > 0).length - 1)
+            let x = line.x
+            if (line.align === 'center') x = line.x - total / 2
+            if (line.align === 'right') x = line.x - total
+            const decayK = line.decay ? smooth(line.out - (line.fade ?? 0.34), line.out, t) : 0
+            line.words.forEach((word, i) => {
+              const text = texts[i]
+              const width = widths[i]
+              if (!text) return
+              const alpha = wordAlpha(word, line, t)
+              if (alpha < 0.01) {
+                x += width + gap
+                return
+              }
+              const size = sizes[i]
+              const jx = line.rain ? (hash(frame + i * 9) - 0.5) * 2 : 0
+              ctx.font = fontFor(word.role, size)
+              ctx.letterSpacing = `${trackPx(word, size)}px`
+              ctx.filter = decayK > 0.04 ? `blur(${(decayK * 2.4).toFixed(2)}px)` : 'none'
+              if (word.splitFor && t >= word.t && t < word.t + word.splitFor) {
+                ctx.globalAlpha = alpha * 0.8
+                ctx.fillStyle = MAGENTA
+                ctx.fillText(text, x + jx + 5, line.y)
+                ctx.fillStyle = FOG
+                ctx.fillText(text, x + jx - 5, line.y)
+              }
+              if (decayK > 0.04) {
+                ctx.globalAlpha = alpha * 0.35
+                ctx.fillStyle = PAPER
+                ctx.fillText(text, x + jx, line.y + 3 + decayK * 5)
+              }
+              ctx.globalAlpha = alpha * 0.93
+              ctx.fillStyle = word.cyan ? FOG : PAPER
+              ctx.fillText(text, x + jx, line.y)
+              x += width + gap
+            })
+          }
+          ctx.restore()
+        }
+
+        const weaveAt = (t) => {
+          if (REDUCED) return { x: 0, y: 0 }
+          return { x: Math.sin(t * 1.7) * 1.1, y: Math.sin(t * 1.15 + 2) * 0.8 }
+        }
+
+        const renderFrame = (t) => {
+          ctx.setTransform(1, 0, 0, 1, 0, 0)
+          ctx.filter = 'none'
+          ctx.globalAlpha = 1
+          ctx.globalCompositeOperation = 'source-over'
+          ctx.fillStyle = HARBOR
+          ctx.fillRect(0, 0, W, H)
+          if (t < 0) return
+
+          const weave = weaveAt(t)
+          const maps = []
+          let fog = 0
+          let oxblood = 0
+          let letterbox = 0
+          let brighten = 0
+          let clockMap = null
+
+          for (const section of SECTIONS) {
+            const alpha = sectionAlpha(section, t)
+            if (alpha < 0.004) continue
+            const map = drawPlate(plates[section.plate], section, t, alpha, weave)
+            if (!map) continue
+            maps.push(map)
+            if (section.fog) fog = Math.max(fog, section.fog * alpha)
+            if (section.oxblood) oxblood = Math.max(oxblood, alpha)
+            if (section.letterbox) letterbox = Math.max(letterbox, alpha)
+            if (section.clock && alpha > 0.4) clockMap = map
+            if (section.brightenAt && t > section.brightenAt) brighten = smooth(section.brightenAt, section.brightenAt + 1.4, t) * alpha
+          }
+          if (t > 76 && t < 85) fog = Math.max(fog, smooth(76, 78, t) * (1 - smooth(83, 85, t)) * 0.2)
+          if (t > 131 && t < 149) fog = Math.max(fog, 0.18)
+
+          if (fog > 0.01) {
+            ctx.save()
+            ctx.globalCompositeOperation = 'soft-light'
+            ctx.globalAlpha = fog
+            ctx.fillStyle = FOG
+            ctx.fillRect(0, 0, W, H)
+            ctx.restore()
+          }
+          if (oxblood > 0.05) {
+            const gradient = ctx.createLinearGradient(0, H * 0.62, 0, H)
+            gradient.addColorStop(0, 'rgba(74,28,40,0)')
+            gradient.addColorStop(1, `rgba(74,28,40,${0.55 * oxblood})`)
+            ctx.fillStyle = gradient
+            ctx.fillRect(0, H * 0.5, W, H * 0.5)
+          }
+          if (brighten > 0.02) {
+            const gradient = ctx.createRadialGradient(W / 2, H / 2, 40, W / 2, H / 2, 420)
+            gradient.addColorStop(0, `rgba(232,164,90,${0.18 * brighten})`)
+            gradient.addColorStop(1, 'rgba(232,164,90,0)')
+            ctx.globalCompositeOperation = 'screen'
+            ctx.fillStyle = gradient
+            ctx.fillRect(0, 0, W, H)
+            ctx.globalCompositeOperation = 'source-over'
+          }
+
+          ctx.globalAlpha = 1
+          for (const map of maps) drawFlare(map)
+          if (clockMap) drawClock(clockMap, t)
+
+          ctx.fillStyle = 'rgba(0,0,0,0.14)'
+          ctx.fillRect(0, 0, W, H)
+
+          drawType(t)
+          drawGrain(t, t < 24.15 ? 0.38 : 0.32)
+          drawScan(t, staticLevel(t))
+
+          const edge = ctx.createLinearGradient(0, 0, W, 0)
+          edge.addColorStop(0, 'rgba(126,200,198,0.16)')
+          edge.addColorStop(0.08, 'rgba(126,200,198,0)')
+          edge.addColorStop(0.92, 'rgba(196,91,138,0)')
+          edge.addColorStop(1, 'rgba(196,91,138,0.16)')
+          ctx.fillStyle = edge
+          ctx.fillRect(0, 0, W, H)
+
+          drawTear(t)
+
+          if (INVERTS.some((hit) => Math.abs(t - hit) < 0.5 / FPS)) {
+            ctx.save()
+            ctx.globalCompositeOperation = 'difference'
+            ctx.fillStyle = '#fff'
+            ctx.globalAlpha = 0.92
+            ctx.fillRect(0, 0, W, H)
+            ctx.restore()
+          }
+
+          if (letterbox > 0.35) {
+            const bar = (H - W / 2.35) / 2
+            ctx.globalAlpha = 0.62 * letterbox
+            ctx.fillStyle = HARBOR
+            ctx.fillRect(0, 0, W, bar)
+            ctx.fillRect(0, H - bar, W, bar)
+            ctx.globalAlpha = 1
+          }
+
+          if (vignette && t < 207) ctx.drawImage(vignette, 0, 0)
+
+          if (t > 206.2) {
+            ctx.globalAlpha = smooth(206.2, 207.5, t)
+            ctx.fillStyle = HARBOR
+            ctx.fillRect(0, 0, W, H)
+            ctx.globalAlpha = 1
+            drawGrain(t, 0.45 * smooth(206.2, 207.5, t))
+          }
+        }
+
+        const audio = new Audio()
+        audio.preload = 'auto'
+        audio.src = encodeURI(AUDIO)
+        let audioOk = true
+        audio.addEventListener('error', () => {
+          audioOk = false
+          warn('Audio failed to load.', audio.error)
+        })
+
+        const clock = { playing: false, started: false, position: START_AT, wall: 0, last: -1 }
+        const now = () => performance.now() / 1000
+        const currentTime = () => {
+          if (!clock.playing) return clock.position
+          if (audioOk && !audio.paused && !audio.ended) return audio.currentTime
+          return clock.position + (now() - clock.wall)
+        }
+
+        let exporting = false
+
+        const play = async () => {
+          if (clock.position >= DURATION) clock.position = 0
+          clock.playing = true
+          clock.started = true
+          clock.wall = now()
+          if (gate) gate.hidden = true
+          if (!audioOk) return
+          try {
+            audio.currentTime = clock.position
+            await audio.play()
+          } catch (error) {
+            audioOk = false
+            warn('Playback blocked, continuing silent.', error)
+          }
+        }
+
+        const pause = () => {
+          clock.position = currentTime()
+          clock.playing = false
+          audio.pause()
+          if (gate && !exporting) gate.hidden = false
+        }
+
+        const seek = (delta) => {
+          const target = clamp(currentTime() + delta, 0, DURATION)
+          clock.position = target
+          clock.wall = now()
+          if (audioOk) audio.currentTime = Math.min(target, (audio.duration || target) - 0.05)
+        }
+
+        audio.addEventListener('ended', () => {
+          clock.position = audio.duration || DURATION
+          clock.wall = now()
+        })
+
+        const tick = () => {
+          if (!clock.started) {
+            requestAnimationFrame(tick)
+            return
+          }
+          const t = currentTime()
+          if (clock.playing && t >= DURATION) {
+            clock.playing = false
+            clock.position = DURATION
+            if (gate) gate.hidden = false
+          }
+          const frame = Math.floor(t * FPS)
+          if (frame !== clock.last) {
+            clock.last = frame
+            renderFrame(frame / FPS)
+          }
+          requestAnimationFrame(tick)
+        }
+
+        const handleKey = (event) => {
+          if (exporting) return
+          if (event.code === 'Space') {
+            event.preventDefault()
+            if (clock.playing) pause()
+            else play()
+          } else if (event.key === 'ArrowRight') seek(5)
+          else if (event.key === 'ArrowLeft') seek(-5)
+        }
+
+        const api = {
+          isReady: false,
+          fps: FPS,
+          duration: DURATION,
+          width: W,
+          height: H,
+          renderFrame: (index) => {
+            renderFrame(index / FPS)
+            return true
+          },
+          capture: (index, quality = 0.92) => {
+            renderFrame(index / FPS)
+            return canvas.toDataURL('image/jpeg', quality)
+          },
+        }
+        window.__STARSHIP = api
+        window.__MOTION = api
+
+        const boot = async () => {
+          ctx.fillStyle = HARBOR
+          ctx.fillRect(0, 0, W, H)
+          await Promise.all([loadFonts(), loadAssets()])
+          api.isReady = true
+          log('Ready', { duration: DURATION, plates: Object.keys(plates).length })
+          if (IS_EXPORT) return
+          gate?.addEventListener('click', () => (clock.playing ? pause() : play()))
+          window.addEventListener('keydown', handleKey)
+          renderFrame(START_AT || 12)
+          requestAnimationFrame(tick)
+          if (window.MotionExport) {
+            window.MotionExport.attachExportButton({
+              canvas,
+              fps: FPS,
+              duration: DURATION,
+              fileName: 'starship-rising-1080p24.mp4',
+              audioUrl: encodeURI(AUDIO),
+              bitrate: 16_000_000,
+              renderFrame: (index) => renderFrame(index / FPS),
+              onStart: () => {
+                exporting = true
+                if (clock.playing) pause()
+                if (gate) gate.hidden = true
+              },
+              onFinish: () => {
+                exporting = false
+                if (gate) gate.hidden = clock.playing
+                renderFrame(currentTime() || 12)
+              },
+            })
+          }
+        }
+
+        boot().catch((error) => {
+          console.error('[starship] Boot failed', error)
+          api.bootError = String(error)
+        })
+      })()
+    </script>
+  </body>
+</html>
